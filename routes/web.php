@@ -14,4 +14,8 @@ use App\Http\Controllers\ScrapingController;
 */
 
 
-Route::get('/scraping', [ScrapingController::class, 'index'])->name('scraping');
+Route::get('/scraping/moeda', [ScrapingController::class, 'getCotacaoMoeda'])->name('scraping');
+Route::get('/car/versions', [ScrapingController::class, 'getCarVersions'])->name('scraping');
+Route::get('/car/models', [ScrapingController::class, 'getCarModels'])->name('scraping');
+Route::get('/car/categories', [ScrapingController::class, 'getCarCategories'])->name('scraping');
+Route::get('/car/versions/model', [ScrapingController::class, 'saveModelVersions'])->name('scraping');
