@@ -11,4 +11,10 @@ class CarVersion extends Model
 
 
     protected $fillable = ['desc'];
+
+
+    public function versions()
+    {
+        return $this->hasMany(CarVersionItem::class, 'car_version_id', 'id');
+    }
 }

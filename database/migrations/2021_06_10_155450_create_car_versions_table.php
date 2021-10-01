@@ -16,6 +16,7 @@ class CreateCarVersionsTable extends Migration
         Schema::create('car_versions', function (Blueprint $table) {
             $table->id()->autoIncrement();
             $table->string('desc');
+            $table->string('url_reference');
             $table->bigInteger('car_models_id');
             $table->timestamps();
         });

@@ -6,6 +6,7 @@ use App\Models\CarCategories;
 use App\Models\CarMake;
 use App\Models\CarModel;
 use App\Models\CarVersion;
+use App\Models\CarVersionItem;
 use Illuminate\Http\Request;
 use Goutte\Client;
 use Illuminate\Http\Response;
@@ -18,10 +19,23 @@ use Symfony\Component\HttpClient\HttpClient;
 
 class ScrapingController extends Controller
 {
-    private $filterMake = '.filters__item ul li';
-    private $filterModel = '.listing-container article .model-versions-card__model';
-    private $filterSrc = '.filters__item ul li a';
-    private $filterVersions = '';
+
+    private $urlVersionSearch = 'https://www.autocosmos.cl/';
+
+    private $filterMake = 'html body main div div div div div div ul li a';
+    private $filterHref = 'html body main div div div div div div ul li a';
+    private $filterModel = 'html body main div section div div article div div h3 a';
+    private $filterHrefModels = 'html body main div section div div article div div h3 a';
+    private $filterVersions = 'html body main section div div div table tbody tr td a';
+    private $filterVersionsHref = 'html body main section div div div table tbody tr td a';
+    private $filterVersionsFeatures = 'html body main article div section div div div table';
+    private $filterVersionsPrice = 'html body main article section div p strong';
+
+    public function __construct()
+    {
+        ini_set('max_execution_time', 7200);
+    }
+
 
     public function getCotacaoMoeda()
     {
@@ -37,87 +51,152 @@ class ScrapingController extends Controller
         return response()->json(['data' => $return]);
     }
 
+
     public function getCarModels()
     {
-
+        $this->clearTables();
         $mainUrl = 'https://www.autocosmos.cl';
 
-
         $client  = new Client(HttpClient::create());
-        // $url = 'https://www.autocosmos.cl/catalogo/busqueda/sedan/honda/civic';
-        // $client  = new Client(HttpClient::create(['timeout' => 60]));
-        // $crawler = $client->request('GET', $url);
-        // $return = $crawler->filter('.model-versions-card__collapse li p')->each(function ($node) {
-        //     return $node->text();
-        // });
 
-        // Get all models
         $url = "https://www.autocosmos.cl/catalogo/busqueda/segmentos";
-
 
         $crawler = $client->request('GET', $url);
         $makes = $crawler->filter($this->filterMake)->each(function ($node) {
             return $node->text();
         });
 
-        // Group by Categories x models
+               // Group by Categories x models
         $categories = CarCategories::all();
+
+        // Begin foreach categories
         foreach ($categories as $categorie) {
 
             $categorieAlias = $categorie->alias;
             $categorieId = $categorie->id;
 
-            $urlModels = "https://www.autocosmos.cl/catalogo/busqueda/$categorieAlias/";
+            $urlCategory = "https://www.autocosmos.cl/catalogo/busqueda/$categorieAlias/";
 
             $client  = new Client(HttpClient::create());
-            $crawler = $client->request('GET', $urlModels);
-            $makes = $crawler->filter($this->filterSrc)->each(function ($node) {
+            $crawler = $client->request('GET', $urlCategory);
+            $makes = $crawler->filter($this->filterMake)->each(function ($node) {
                 return $node->text();
             });
-            return response()->json(['data' => $makes]);
-            // Group by models x makes
-            foreach ($makes as $make) {
 
-                $urlModels = "https://www.autocosmos.cl/catalogo/busqueda/segmentos/$make";
+            // get href for scraping href tag 'a'.
+            $makes_href = $crawler->filter($this->filterHref)->each(function ($node) {
+                return $node->attr('href');
+            });
+
+            // Group by models x makes
+            // for ($i=1; $i<=count($makes_href); $i++) {
+                foreach ($makes_href as $key => $makeHref) {
+
+                $urlModels = "https://www.autocosmos.cl$makes_href[$key]";
                 $client  = new Client(HttpClient::create());
                 $crawler = $client->request('GET', $urlModels);
+
                 $models = $crawler->filter($this->filterModel)->each(function ($node) {
                     return $node->text();
                 });
+
+                // get href Models from scraping
+                $modelsHref = $crawler->filter($this->filterHrefModels)->each(function ($node) {
+                    return $node->attr('href');
+                });
+
                 $carMake = new CarMake();
-                $carMake->desc = $make;
-                $carMake->alias = $make;
+
+                $carMake->desc = $makes[$key];
+                $carMake->alias = $makes[$key];
                 $carMake->car_categories_id = $categorieId;
+                $carMake->url_reference = $urlCategory;
                 $carMake->save();
 
-                // // Group by models x versions
-                // foreach ($models as $model) {
+                // Group by models x versions
+                foreach ($modelsHref as $key => $modelHref) {
 
-                //     $urlVersions = "https://www.autocosmos.cl/catalogo/vigente/$make/$model";
+                    $urlVersions = "https://www.autocosmos.cl$modelHref";
 
-                //     $client  = new Client(HttpClient::create());
-                //     $crawler = $client->request('GET', $urlVersions);
-                //     $versions = $crawler->filter($this->filterModel)->each(function ($node) {
-                //         return $node->text();
-                //     });
-                //     $carModel = new CarModel();
-                //     $carModel->desc = $model;
-                //     $carModel->alias = $model;
-                //     $carMake->models()->save($carModel);
+                    $client  = new Client(HttpClient::create());
 
-                //     foreach ($versions as $version) {
+                    $carModel = new CarModel();
+                    $carModel->desc = $models[$key];
+                    $carModel->alias = $models[$key];
+                    $carModel->url_reference = $urlModels;
+                    $carMake->models()->save($carModel);
 
-                //         $carVersion = new CarVersion();
-                //         $carVersion->desc = $version;
+                    $crawler = $client->request('GET', $urlVersions);
+                    $versions = $crawler->filter($this->filterVersions)->each(function ($node) {
+                        return $node->text();
+                    });
 
-                //         $carModel->versions()->save($carVersion);
-                //     }
-                // }
+                    // get href Models from scraping
+                    $versionsHref = $crawler->filter($this->filterVersionsHref)->each(function ($node) {
+                        return $node->attr('href');
+                    });
+
+                    foreach($versionsHref as $key => $versionHref){
+                       $carVersion = new CarVersion();
+                       $carVersion->desc = $versions[$key];
+                       $carVersion->url_reference = $versions[$key];
+
+                       $carModel->versions()->save($carVersion);
+
+                       $urlVersionsItems = "https://www.autocosmos.cl$versionHref";
+
+                       $crawler = $client->request('GET', $urlVersionsItems);
+                        $tableVersion = $crawler->filter($this->filterVersionsFeatures)->filter('tr')->each(function ($tr, $i) {
+                            return $tr->filter('td')->each(function ($td, $i) {
+                                return trim($td->text());
+                            });
+                        });
+
+
+                        $priceVersion = $crawler->filter($this->filterVersionsPrice)->each(function ($node) {
+                            return $node->text();
+                        });
+
+                        $carVersionItem = new CarVersionItem();
+
+                        if(count($tableVersion)>0){
+
+                            $carVersionItem->fuel = $tableVersion[0][1];
+                            $carVersionItem->width = $tableVersion[20][1];
+                            $carVersionItem->height = $tableVersion[23][1];
+                            $carVersionItem->traction = $tableVersion[14][1];
+                            $carVersionItem->cc = $tableVersion[1][1];
+                            $carVersionItem->doors = "5";
+                            $carVersionItem->screen = "NI";
+                            $carVersionItem->android = "NI";
+                            $carVersionItem->air_bag = $tableVersion[50][1];
+                            $carVersionItem->price =  count($priceVersion) == 0 ? '$0.00' : $priceVersion[0];
+                            $carVersionItem->doors = $tableVersion[49][1];
+                            $carVersionItem->abs = $tableVersion[47][1];
+                            $carVersionItem->steering_wheel = $tableVersion[46][1];
+                            $carVersionItem->air_cond = $tableVersion[30][1];
+                            $carVersionItem->bluetooth = "NI";
+                            $carVersionItem->tires = $tableVersion[16][1];
+                            $carVersionItem->url_reference = $urlVersionsItems;
+
+                            $carVersion->versions()->save($carVersionItem);
+
+                        }
+                    }
+
+                }
             }
         }
 
+        return response()->json(['data' => "Scraping Realizado com sucesso!!"]);
+    }
 
-        return response()->json(['data' => $models]);
+    private function clearTables(){
+        $carMake = new CarMake();
+        $carModel = new CarModel();
+
+        $carMake->delete();
+        $carModel->delete();
     }
 
 

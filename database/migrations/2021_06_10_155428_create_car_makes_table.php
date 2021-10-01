@@ -17,6 +17,7 @@ class CreateCarMakesTable extends Migration
             $table->id()->autoIncrement();
             $table->string('desc');
             $table->string('alias');
+            $table->string('url_reference');
             $table->bigInteger('car_categories_id');
             $table->timestamps();
         });

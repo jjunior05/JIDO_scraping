@@ -17,6 +17,7 @@ class CreateCarModelsTable extends Migration
             $table->id();
             $table->string('desc');
             $table->string('alias');
+            $table->string('url_reference');
             $table->bigInteger('car_makes_id');
             $table->timestamps();
         });
